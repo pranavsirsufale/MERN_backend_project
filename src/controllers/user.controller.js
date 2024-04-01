@@ -4,10 +4,31 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from '../utils/ApiResponse.js'
 
+
+const generateAccessAndRefreshToken = async (userId)=>{
+  try {
+    const user = await User.findById(userId)
+    const accessToken = user.generateAccessToken()
+    const refreshToken = user.generateRefreshToken()
+
+    user.refreshToken = refreshToken
+    await user.save({validateBeforeSave: false})
+
+    return { accessToken, refreshToken }
+
+
+  } catch (error) {
+    throw new ApiError(500,'something went wrong while generating refresh and access token')
+  }
+}
+
+
+
+
 const registerUser = asyncHandler(async (req, res) => {
-  res.status(200).json({
-    message: "hello from pranav 👋 ",
-  });
+  // res.status(200).json({
+  //   message: "hello from pranav 👋 ",
+  // });
 
   //todo 1> get user details from frontend
   //todo 2> validation - not empty
@@ -20,7 +41,7 @@ const registerUser = asyncHandler(async (req, res) => {
   //todo 9> return res
 
   const { fullname, email, username, password } = req.body;
-  console.log("email : ", email);
+  // console.log("email : ", email);
 
   if (
     [fullname, email, username, password].some((field) => field?.trim() === "")
@@ -28,7 +49,7 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, "All fields are required !");
   }
 
-  const existedUser = User.findOne({
+  const existedUser = await User.findOne({
     $or: [{ username }, { email }],
   });
 
@@ -37,7 +58,13 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 
   const avatarLocalPath = req.files?.avatar[0]?.path;
-  const coverImageLocalPath = req.files?.coverImage[0]?.path;
+  // const coverImageLocalPath = req.files?.coverImage[0]?.path;
+
+  let coverImageLocalPath 
+  if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0 ){
+    coverImageLocalPath = req.files.coverImage[0]
+  }
+
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avata Image is required ");
   }
@@ -66,16 +93,50 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(500,'Something Went Wrong While Registering the User ')
   }
 
-  return res.status(201).json(
-    new ApiResponse(200, createdUser , "User has been registerd succesfully ✅ ")
+  return  res.status(201).json(
+    new ApiResponse(200, createdUser , "User has been registerd ✅✅😎")
   )
 
-  
-
-
-
-  
-
 });
+
+
+const loginUser = asyncHandler( async (req,res)=>{
+  //todo 1> req body -> data 
+  //todo 2> username or email
+  //todo 3> find the user 
+  //todo 4> password check 
+  //todo 5> access and refresh token 
+  //todo 6> send cookies 
+
+  const { email, username , password } = req.body
+  if( !email || !username){
+    throw new ApiError(400,"username or email is required ")
+  };
+
+  const user = await User.findOne({
+    $or: [{username} , {email}]
+  });
+
+  if(!user){
+    throw new ApiError(404, "User does not exist")
+  }
+
+  const isPasswordValid = await user.isPasswordCorrect(password)
+  
+  if(!isPasswordValid){
+    throw new ApiError(401,"Invalid Passwrod ")
+  };
+
+
+  const {accessToken , refreshToken} = await generateAccessAndRefreshToken(user._id)
+
+  
+
+
+
+
+
+  
+})
 
 export { registerUser };
